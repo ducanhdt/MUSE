@@ -5,30 +5,8 @@
 # LICENSE file in the root directory of this source tree.
 #
 
-import os
-import io
-import re
-import sys
-import pickle
-import random
-import inspect
-import argparse
-import subprocess
-import numpy as np
-import torch
-from torch import optim
-from logging import getLogger
-
-from .logger import create_logger
-from .dictionary import Dictionary
-
-
-MAIN_DUMP_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'dumped')
-
-logger = getLogger()
-
-
 # load Faiss if available (dramatically accelerates the nearest neighbor search)
+import sys
 try:
     import faiss
     FAISS_AVAILABLE = True
@@ -42,6 +20,105 @@ except ImportError:
                      "Switching to standard nearest neighbors search implementation, "
                      "this will be significantly slower.\n\n")
     FAISS_AVAILABLE = False
+import os
+import io
+import re
+import pickle
+import random
+import inspect
+import argparse
+import subprocess
+import numpy as np
+import torch
+from torch import optim
+from logging import getLogger
+from tqdm import tqdm
+
+from .logger import create_logger
+from .dictionary import Dictionary
+from transformers import AutoTokenizer, AutoModel
+from typing import List
+
+MAIN_DUMP_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'dumped')
+
+logger = getLogger()
+
+def get_entity_embeddings(entity_list: List[str], batch_size: int = 32, model_name: str = 'bert-base-multilingual-cased') -> torch.Tensor:
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = AutoModel.from_pretrained(model_name)
+        model.to(device) # Move model to the selected device
+        model.eval() # Set the model to evaluation mode
+    except Exception as e:
+        print(f"Error loading model or tokenizer: {e}")
+        return torch.empty(0)
+
+    all_embeddings = []
+    # add tqdm for progress tracking
+    
+    for i in tqdm(range(0, len(entity_list), batch_size)):
+        batch_entities = entity_list[i:i + batch_size]
+        try:
+            encoded_input = tokenizer(
+                batch_entities,
+                padding=True,
+                truncation=True,
+                return_tensors="pt",
+                max_length=512 # mBERT's max sequence length
+            )
+        except Exception as e:
+            print(f"Error tokenizing batch: {e}")
+            num_failed_entities = len(batch_entities)
+            embedding_dim = model.config.hidden_size 
+            all_embeddings.extend([torch.zeros(embedding_dim) for _ in range(num_failed_entities)])
+            continue
+
+
+        # Move tokenized input to the selected device
+        input_ids = encoded_input['input_ids'].to(device)
+        attention_mask = encoded_input['attention_mask'].to(device)
+
+        # Get model outputs (no gradient calculation needed)
+        with torch.no_grad():
+            try:
+                outputs = model(input_ids, attention_mask=attention_mask)
+            except Exception as e:
+                print(f"Error during model inference: {e}")
+                num_failed_entities = len(batch_entities)
+                embedding_dim = model.config.hidden_size
+                all_embeddings.extend([torch.zeros(embedding_dim) for _ in range(num_failed_entities)])
+                continue
+
+
+        last_hidden_states = outputs.last_hidden_state # Shape: (batch_size, sequence_length, hidden_size)
+
+        for j in range(last_hidden_states.shape[0]): # Iterate over each entity in the batch
+            entity_hidden_states = last_hidden_states[j] # Shape: (sequence_length, hidden_size)
+            entity_attention_mask = attention_mask[j] # Shape: (sequence_length)
+            expanded_mask = entity_attention_mask.unsqueeze(-1).expand(entity_hidden_states.size()).float()
+            sum_embeddings = torch.sum(entity_hidden_states * expanded_mask, dim=0)
+            sum_mask = torch.clamp(expanded_mask.sum(dim=0), min=1e-9) 
+            mean_embedding = sum_embeddings / sum_mask
+            all_embeddings.append(mean_embedding.cpu()) # Move embedding to CPU
+
+    if not all_embeddings:
+        print("No embeddings were generated.")
+        return torch.empty(0)
+        
+    # Stack all entity embeddings into a single tensor
+    try:
+        final_embeddings = torch.stack(all_embeddings)
+    except Exception as e:
+        # This can happen if embeddings have different shapes, though they shouldn't with this logic.
+        print(f"Error stacking embeddings: {e}. Returning list of tensors.")
+        return all_embeddings # Fallback to returning a list if stacking fails
+
+    return final_embeddings
+
+
 
 
 def initialize_exp(params):
@@ -215,7 +292,7 @@ def get_optimizer(s):
         raise Exception('Unknown optimization method: "%s"' % method)
 
     # check that we give good parameters to the optimizer
-    expected_args = inspect.getargspec(optim_fn.__init__)[0]
+    expected_args = inspect.getfullargspec(optim_fn.__init__)[0]
     assert expected_args[:2] == ['self', 'params']
     if not all(k in expected_args[2:] for k in optim_params.keys()):
         raise Exception('Unexpected parameters: expected "%s", got "%s"' % (
@@ -245,6 +322,7 @@ def get_exp_path(params):
                 break
     else:
         exp_path = os.path.join(exp_folder, params.exp_id)
+        os.system("rm -rf %s" % exp_path)  # remove the previous experiment with the same ID
         assert not os.path.isdir(exp_path), exp_path
     # create the dump folder
     if not os.path.isdir(exp_path):

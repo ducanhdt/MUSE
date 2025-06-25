@@ -1,4 +1,11 @@
 # MUSE data and result folders
+data/*
+Knes_dataset
+knes_data
+*.csv
+*.zip
+eval_output/
+logs
 
 data/crosslingual/
 data/monolingual/
@@ -124,3 +131,4 @@ Session.vim
 tags
 
 # End of https://www.gitignore.io/api/vim,python
+

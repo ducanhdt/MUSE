@@ -15,7 +15,7 @@ from src.utils import bool_flag, initialize_exp
 from src.models import build_model
 from src.trainer import Trainer
 from src.evaluation import Evaluator
-
+from src.dictionary import Dictionary
 
 VALIDATION_METRIC_SUP = 'precision_at_1-csls_knn_10'
 VALIDATION_METRIC_UNSUP = 'mean_cosine-csls_knn_10-S2T-10000'

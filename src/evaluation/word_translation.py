@@ -47,7 +47,12 @@ def load_dictionary(path, word2id1, word2id2):
     loader dictionary, and sort it by source word frequency.
     """
     assert os.path.isfile(path)
-
+    # print("path:", path)
+    # # save word2id1 and word2id2 to avoid loading them again
+    # import pickle
+    # with open('tmp.pickle', 'wb') as f:
+    #     pickle.dump((word2id1, word2id2), f)
+    
     pairs = []
     not_found = 0
     not_found1 = 0
@@ -55,6 +60,7 @@ def load_dictionary(path, word2id1, word2id2):
 
     with io.open(path, 'r', encoding='utf-8') as f:
         for index, line in enumerate(f):
+            line = line.lower()
             assert line == line.lower()
             parts = line.rstrip().split()
             if len(parts) < 2:

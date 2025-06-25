@@ -6,6 +6,24 @@ MUSE is a Python library for *multilingual word embeddings*, whose goal is to pr
 * large-scale high-quality bilingual dictionaries for training and evaluation
 
 We include two methods, one *supervised* that uses a bilingual dictionary or identical character strings, and one *unsupervised* that does not use any parallel data (see [Word Translation without Parallel Data](https://arxiv.org/pdf/1710.04087.pdf) for more details).
+## Duc Anh Change
+I was add the code to extract the entity and run the finetune evaluation script for Knes dataset and dbp15k dataset. 
+### Used
+install the requirements using conda_env.yml file:
+```bash
+conda env create -n muse -f conda_env.yml
+conda activate muse
+```
+
+```bash
+python knes_extract_embedding.py
+python dbp15k_extract_embedding.py #for dbp15k dataset
+
+python train_all_knes.py #run all exprience for knes dataset
+python train_all_dbp15k.py #run all exprience for dbp15k dataset
+
+python summary.py # gather result and export csv file
+```
 
 ## Dependencies
 * Python 2/3 with [NumPy](http://www.numpy.org/)/[SciPy](https://www.scipy.org/)

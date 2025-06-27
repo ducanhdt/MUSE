@@ -9,7 +9,7 @@ logs
 
 data/crosslingual/
 data/monolingual/
-dumped/
+dumped*
 
 # Created by https://www.gitignore.io/api/vim,python
 

@@ -9,8 +9,7 @@ from src.dictionary import Dictionary
 entity_folder = "/home/cs.aau.dk/qz83md/MUSE/Knes_dataset/data/entity"
 seed_alignlinks_folder = "/home/cs.aau.dk/qz83md/MUSE/Knes_dataset/data/seed_alignlinks"
 
-align_output_folder = "/home/cs.aau.dk/qz83md/MUSE/data/knes_data/aligns"
-embedding_output_folder = "/home/cs.aau.dk/qz83md/MUSE/data/knes_data/pth"
+embedding_output_folder = "/home/cs.aau.dk/qz83md/MUSE/data/knes_processed"
 
 embedding_model_map = {'mbert':'bert-base-multilingual-cased',
                         'xlm-r':'FacebookAI/xlm-roberta-base',
@@ -19,8 +18,6 @@ embedding_model_map = {'mbert':'bert-base-multilingual-cased',
 if __name__ == "__main__":
     if not os.path.exists(embedding_output_folder):
         os.makedirs(embedding_output_folder)
-    if not os.path.exists(align_output_folder):
-        os.makedirs(align_output_folder)
 
     entities = {}
     for lang in os.listdir(entity_folder):
@@ -57,6 +54,17 @@ if __name__ == "__main__":
 
     for link_path in os.listdir(seed_alignlinks_folder):
         src_lang, tgt_lang = link_path.split('.')[0].split('-')
+        if not os.path.exists(f'{embedding_output_folder}/{src_lang}_{tgt_lang}'):
+            os.makedirs(f'{embedding_output_folder}/{src_lang}_{tgt_lang}')
+
+        # copy embedding files
+        for model_name in embedding_model_map:
+            src_path = f"{embedding_output_folder}/{src_lang}_{model_name}.pth"
+            tgt_path = f"{embedding_output_folder}/{tgt_lang}_{model_name}.pth"
+            if os.path.exists(src_path) and os.path.exists(tgt_path):
+                os.system(f"cp {src_path} {embedding_output_folder}/{src_lang}_{tgt_lang}/")
+                os.system(f"cp {tgt_path} {embedding_output_folder}/{src_lang}_{tgt_lang}/")
+
         all_pairs = []
         for line in open(f"{seed_alignlinks_folder}/{link_path}"):
             src_idx, tgt_idx = line.strip().split('\t')
@@ -66,7 +74,7 @@ if __name__ == "__main__":
             tgt_entity = entities[tgt_lang][tgt_idx]
             all_pairs.append(f"{src_entity}\t{tgt_entity}\n")
 
-        with open(f"{align_output_folder}/{link_path}", 'w') as f:
+        with open(f"{embedding_output_folder}/{src_lang}_{tgt_lang}/align.txt", 'w') as f:
             for pair in all_pairs:
                 f.write(pair)
         
@@ -74,9 +82,9 @@ if __name__ == "__main__":
         for train_size in [30,50,70,90]:
             train, test = all_pairs[:int(len(all_pairs) * train_size / 100)], all_pairs[int(len(all_pairs) * train_size / 100):]
             print(f"Train size: {train_size}%, {link_path}")
-            with open(f"{align_output_folder}/{src_lang}-{tgt_lang}_train_{train_size}_{100-train_size}.txt", 'w') as f:
+            with open(f"{embedding_output_folder}/{src_lang}_{tgt_lang}/align_train_{train_size}_{100-train_size}.txt", 'w') as f:
                 for pair in train:
                     f.write(pair)
-            with open(f"{align_output_folder}/{src_lang}-{tgt_lang}_test_{train_size}_{100-train_size}.txt", 'w') as f:
+            with open(f"{embedding_output_folder}/{src_lang}_{tgt_lang}/align_test_{train_size}_{100-train_size}.txt", 'w') as f:
                 for pair in test:
                     f.write(pair)
